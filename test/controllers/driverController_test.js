@@ -5,6 +5,15 @@ const mongoose = require("mongoose");
 const Driver = mongoose.model("driver");
 
 describe("Drivers controller", () => {
+  beforeEach((done) => {
+    const { drivers } = mongoose.connection.collections;
+    drivers
+      .drop()
+      .then(() => drivers.createIndex({ "geometry.coordinates": "2dsphere" }))
+      .then(() => done())
+      .catch(() => done());
+  });
+
   it("Post to /api/drivers creates a new driver", (done) => {
     Driver.countDocuments().then((count) => {
       request(app)
@@ -21,7 +30,7 @@ describe("Drivers controller", () => {
     done();
   });
 
-  xit("PUT to /api/drivers/id edits an existing driver", (done) => {
+  it("PUT to /api/drivers/id edits an existing driver", (done) => {
     const driver = new Driver({ email: "t@t.com", driving: false });
     driver.save().then(() => {
       request(app)
@@ -51,6 +60,29 @@ describe("Drivers controller", () => {
             assert(!driver);
             done();
           });
+        });
+    });
+  });
+
+  it("GET to /api/drivers finds a drivers within reach", (done) => {
+    const seattleDriver = new Driver({
+      email: "seattle@test.com",
+      geometry: { type: "Point", coordinates: [-122.234626, 47.6543012] },
+    });
+
+    const miamiDriver = new Driver({
+      email: "miami@test.com",
+      geometry: { type: "Point", coordinates: [-80.253, 25.791] },
+    });
+
+    Promise.all([seattleDriver.save(), miamiDriver.save()]).then(() => {
+      request(app)
+        .get("/api/drivers?lng=-80&lat=25")
+        .end((err, response) => {
+          //console.log(response);
+          assert(response.body.length === 1);
+          assert(response.body[0].email === "miami@test.com");
+          done();
         });
     });
   });
